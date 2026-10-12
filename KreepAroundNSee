@@ -1,21 +1,119 @@
-{
-  "size": 14,
-  "checksum": "30b260bb40f427a0b68ad03dd3a28e5ff336006a9e7a0cba698551c6de72751c",
-  "xor": 170,
-  "bytes": [
-    218,
-    216,
-    195,
-    196,
-    222,
-    130,
-    136,
-    194,
-    207,
-    198,
-    198,
-    197,
-    136,
-    131
-  ]
-}
+local players = game:GetService('Players')
+local userinput = game:GetService('UserInputService')
+local player = players.LocalPlayer
+
+local window = imgui({
+	title = 'demo',
+	size = Vector2.new(340, 440),
+	position = Vector2.new(60, 120),
+})
+
+window:addlabel('plain text label')
+window:addtext({ text = '<b>styled text</b>', color = Color3.fromRGB(120, 200, 255) })
+local info_label = window:addtext('waiting for character')
+
+window:adddivider()
+
+local speed_label = window:addlabel('walkspeed: 16')
+window:addslider({
+	text = 'walkspeed',
+	min = 16,
+	max = 200,
+	default = 16,
+	callback = function(value)
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass('Humanoid')
+		if humanoid then
+			humanoid.WalkSpeed = value
+		end
+		speed_label:settext('walkspeed: ' .. value)
+	end,
+})
+
+window:addtoggle({
+	text = 'infinite jump',
+	default = false,
+	callback = function(state)
+		print('infinite jump: ' .. tostring(state))
+	end,
+})
+
+window:adddropdown({
+	text = 'mode',
+	options = { 'default', 'aggressive', 'passive' },
+	default = 'default',
+	callback = function(option)
+		print('mode set to ' .. option)
+	end,
+})
+
+window:addinput({
+	text = 'say something',
+	placeholder = 'type here...',
+	callback = function(text, enter)
+		if enter then
+			print('input: ' .. text)
+		end
+	end,
+})
+
+window:addbutton({
+	text = 'rejoin',
+	callback = function()
+		game:GetService('TeleportService'):Teleport(game.PlaceId, player)
+	end,
+})
+
+window:adddivider()
+
+local streamproof_label = window:addlabel('streamproof: off')
+window:addtoggle({
+	text = 'streamproof',
+	default = false,
+	callback = function(state)
+		imgui:setstreamproof(state)
+		streamproof_label:settext('streamproof: ' .. (state and 'on' or 'off'))
+	end,
+})
+
+window:addkeybind({
+	text = 'toggle ui',
+	default = 'RightShift',
+	callback = function()
+		window:togglevisible()
+	end,
+})
+
+window:addbutton({
+	text = 'close',
+	callback = function()
+		window:destroy()
+	end,
+})
+
+userinput.InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.RightControl then
+		imgui:togglestreamproof()
+		pcall(function()
+			local on = imgui:getstreamproof()
+			streamproof_label:settext('streamproof: ' .. (on and 'on' or 'off'))
+		end)
+	end
+end)
+
+task.spawn(function()
+	while true do
+		local character = player.Character
+		local root = character and character:FindFirstChild('HumanoidRootPart')
+		if root then
+			local position = root.Position
+			info_label:settext(string.format(
+				'x: %.2f\ny: %.2f\nz: %.2f',
+				position.X, position.Y, position.Z
+			))
+		else
+			info_label:settext('waiting for character')
+		end
+		task.wait(0.1)
+	end
+end)
