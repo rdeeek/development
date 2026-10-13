@@ -72,7 +72,7 @@ task.spawn(function()
 				if head and humanoid and humanoid.Health > 0 then
 					local distance = (head.Position - origin).Magnitude
 					if distance <= max_distance then
-						local screen, on_screen = camera:WorldToScreenPoint(head.Position + Vector3.new(0, -1, 0))
+						local screen, on_screen = camera:WorldToScreenPoint(head.Position + Vector3.new(0, -1.5, 0))
 						if on_screen then
 							local color = plain_color
 							if raycast_enabled then
