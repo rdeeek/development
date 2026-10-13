@@ -1,119 +1,95 @@
 local players = game:GetService('Players')
-local userinput = game:GetService('UserInputService')
 local player = players.LocalPlayer
 
 local window = imgui({
-	title = 'demo',
-	size = Vector2.new(340, 440),
+	title = 'player text overlay',
+	size = Vector2.new(260, 150),
 	position = Vector2.new(60, 120),
 })
 
-window:addlabel('plain text label')
-window:addtext({ text = '<b>styled text</b>', color = Color3.fromRGB(120, 200, 255) })
-local info_label = window:addtext('waiting for character')
+local enabled = true
+local raycast_enabled = true
+local max_distance = 500
 
-window:adddivider()
+window:addtoggle({
+	text = 'enabled',
+	default = true,
+	callback = function(state)
+		enabled = state
+	end,
+})
 
-local speed_label = window:addlabel('walkspeed: 16')
+window:addtoggle({
+	text = 'raycast check',
+	default = true,
+	callback = function(state)
+		raycast_enabled = state
+	end,
+})
+
 window:addslider({
-	text = 'walkspeed',
-	min = 16,
-	max = 200,
-	default = 16,
+	text = 'max distance',
+	min = 50,
+	max = 2000,
+	default = 500,
 	callback = function(value)
-		local character = player.Character
-		local humanoid = character and character:FindFirstChildOfClass('Humanoid')
-		if humanoid then
-			humanoid.WalkSpeed = value
-		end
-		speed_label:settext('walkspeed: ' .. value)
+		max_distance = value
 	end,
 })
 
-window:addtoggle({
-	text = 'infinite jump',
-	default = false,
-	callback = function(state)
-		print('infinite jump: ' .. tostring(state))
-	end,
-})
+local visible_color = Color3.fromRGB(80, 255, 120)
+local blocked_color = Color3.fromRGB(255, 80, 80)
+local plain_color = Color3.fromRGB(255, 255, 255)
 
-window:adddropdown({
-	text = 'mode',
-	options = { 'default', 'aggressive', 'passive' },
-	default = 'default',
-	callback = function(option)
-		print('mode set to ' .. option)
-	end,
-})
-
-window:addinput({
-	text = 'say something',
-	placeholder = 'type here...',
-	callback = function(text, enter)
-		if enter then
-			print('input: ' .. text)
-		end
-	end,
-})
-
-window:addbutton({
-	text = 'rejoin',
-	callback = function()
-		game:GetService('TeleportService'):Teleport(game.PlaceId, player)
-	end,
-})
-
-window:adddivider()
-
-local streamproof_label = window:addlabel('streamproof: off')
-window:addtoggle({
-	text = 'streamproof',
-	default = false,
-	callback = function(state)
-		imgui:setstreamproof(state)
-		streamproof_label:settext('streamproof: ' .. (state and 'on' or 'off'))
-	end,
-})
-
-window:addkeybind({
-	text = 'toggle ui',
-	default = 'RightShift',
-	callback = function()
-		window:togglevisible()
-	end,
-})
-
-window:addbutton({
-	text = 'close',
-	callback = function()
-		window:destroy()
-	end,
-})
-
-userinput.InputBegan:Connect(function(input, processed)
-	if not processed and input.KeyCode == Enum.KeyCode.RightControl then
-		imgui:togglestreamproof()
-		pcall(function()
-			local on = imgui:getstreamproof()
-			streamproof_label:settext('streamproof: ' .. (on and 'on' or 'off'))
-		end)
+local function is_visible(origin, target_part, target_character)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { player.Character }
+	local result = workspace:Raycast(origin, target_part.Position - origin, params)
+	if not result then
+		return true
 	end
-end)
+	return result.Instance:IsDescendantOf(target_character)
+end
 
 task.spawn(function()
 	while true do
-		local character = player.Character
-		local root = character and character:FindFirstChild('HumanoidRootPart')
-		if root then
-			local position = root.Position
-			info_label:settext(string.format(
-				'x: %.2f\ny: %.2f\nz: %.2f',
-				position.X, position.Y, position.Z
-			))
-		else
-			info_label:settext('waiting for character')
+		task.wait(0.03)
+
+		if not enabled then
+			imgui:drawtexts({})
+			continue
 		end
-		task.wait(0.1)
+
+		local camera = workspace.CurrentCamera
+		local origin = camera.CFrame.Position
+		local items = {}
+
+		for _, other in ipairs(players:GetPlayers()) do
+			if other ~= player and other.Character then
+				local head = other.Character:FindFirstChild('Head')
+				local humanoid = other.Character:FindFirstChildOfClass('Humanoid')
+				if head and humanoid and humanoid.Health > 0 then
+					local distance = (head.Position - origin).Magnitude
+					if distance <= max_distance then
+						local screen, on_screen = camera:WorldToScreenPoint(head.Position + Vector3.new(0, 1.5, 0))
+						if on_screen then
+							local color = plain_color
+							if raycast_enabled then
+								color = is_visible(origin, head, other.Character) and visible_color or blocked_color
+							end
+							items[#items + 1] = {
+								x = screen.X,
+								y = screen.Y,
+								color = color,
+								text = string.format('%s [%d]', other.Name, math.floor(distance)),
+							}
+						end
+					end
+				end
+			end
+		end
+
+		imgui:drawtexts(items)
 	end
 end)
