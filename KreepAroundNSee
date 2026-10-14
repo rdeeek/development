@@ -44,13 +44,28 @@ local plain_color = Color3.fromRGB(255, 255, 255)
 local function is_visible(origin, target_part, target_character)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = { player.Character }
+	local ignore = {}
+	if player and player.Character then
+		table.insert(ignore, player.Character)
+	end
+	local cam = workspace.CurrentCamera
+	if cam then
+		table.insert(ignore, cam)
+	end
+	params.FilterDescendantsInstances = ignore
 	local result = workspace:Raycast(origin, target_part.Position - origin, params)
 	if not result then
 		return true
 	end
 	return result.Instance:IsDescendantOf(target_character)
 end
+
+local uis = game:GetService("UserInputService")
+uis.InputBegan:Connect(function(input, processed)
+	if not processed and (input.KeyCode == Enum.KeyCode.Insert or input.KeyCode == Enum.KeyCode.RightShift) then
+		window:togglevisible()
+	end
+end)
 
 task.spawn(function()
 	while true do
@@ -62,27 +77,31 @@ task.spawn(function()
 		end
 
 		local camera = workspace.CurrentCamera
+		if not camera then
+			continue
+		end
 		local origin = camera.CFrame.Position
 		local items = {}
 
 		for _, other in ipairs(players:GetPlayers()) do
 			if other ~= player and other.Character then
-				local head = other.Character:FindFirstChild('Head')
-				local humanoid = other.Character:FindFirstChildOfClass('Humanoid')
+				local head = other.Character:FindFirstChild("Head")
+				local humanoid = other.Character:FindFirstChildOfClass("Humanoid")
 				if head and humanoid and humanoid.Health > 0 then
 					local distance = (head.Position - origin).Magnitude
 					if distance <= max_distance then
-						local screen, on_screen = camera:WorldToScreenPoint(head.Position + Vector3.new(0, -1.5, 0))
-						if on_screen then
+						local screen, on_screen = camera:WorldToViewportPoint(head.Position)
+						if on_screen and screen.Z > 0 then
 							local color = plain_color
 							if raycast_enabled then
 								color = is_visible(origin, head, other.Character) and visible_color or blocked_color
 							end
+							local display_title = other.DisplayName ~= "" and other.DisplayName or other.Name
 							items[#items + 1] = {
 								x = screen.X,
-								y = screen.Y,
+								y = screen.Y - 14,
 								color = color,
-								text = string.format('%s [%d]', other.Name, math.floor(distance)),
+								text = string.format("%s [%d]", display_title, math.floor(distance)),
 							}
 						end
 					end
